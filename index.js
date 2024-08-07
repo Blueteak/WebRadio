@@ -1,19 +1,13 @@
 const express = require('express');
 const path = require('path');
-const { getMp3Info, startStreaming } = require('./audio');
+const { initialize } = require('./audio');
 const WebSocket = require('ws');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-
-ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 const port = 3000;
-const filePath = path.join(__dirname, 'test.mp3');
 
 let clients = [];
 let buffer = [];
-let stream = null;
 
 // Serve the HTML file
 app.get('/', (req, res) => {
@@ -49,10 +43,4 @@ wss.on('connection', (ws) => {
     });
 });
 
-getMp3Info(filePath).then((info) => {
-    const speed = info.speed;
-    console.log(`MP3 duration: ${info.duration}s, File size: ${info.fileSize} bytes, Speed: ${speed.toFixed(2)} bytes/ms`);
-    stream = startStreaming(filePath, clients, speed, buffer);
-}).catch((err) => {
-    console.error('Error getting MP3 info:', err.message);
-});
+initialize(clients, buffer);
