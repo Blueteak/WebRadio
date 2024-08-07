@@ -25,7 +25,7 @@ const getMp3Info = (filePath) => {
     });
 };
 
-const startStreaming = (filePath, clients, speed) => {
+const startStreaming = (filePath, clients, speed, buffer) => {
     const command = ffmpeg(filePath)
         .format('mp3')
         .audioCodec('libmp3lame')
@@ -41,12 +41,12 @@ const startStreaming = (filePath, clients, speed) => {
     const throttleStream = (chunk, speed) => {
         return new Promise((resolve) => {
             setTimeout(() => {
+                buffer.push(chunk);
+                if (buffer.length > 10) buffer.shift(); // Keep the last 100 chunks
+
                 clients.forEach((client) => {
-                    if (!client.writableEnded) {
-                        client.write(chunk);
-                        console.log(`Sent ${chunk.length} bytes to client`);
-                    } else {
-                        clients = clients.filter((c) => c !== client);
+                    if (client.readyState === client.OPEN) {
+                        client.send(chunk);
                     }
                 });
                 resolve();
@@ -62,10 +62,9 @@ const startStreaming = (filePath, clients, speed) => {
         } catch (err) {
             console.error('Error in streaming:', err);
         }
-
-        console.log('Restarting stream');
-        startStreaming(filePath, clients, speed);
     })();
+
+    return stream;
 };
 
 module.exports = {

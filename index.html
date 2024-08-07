@@ -5,9 +5,66 @@
     <title>Audio Stream</title>
 </head>
 <body>
-<audio controls>
-    <source src="http://ec2-52-204-230-5.compute-1.amazonaws.com:3000/stream" type="audio/mpeg">
-    Your browser does not support the audio element.
-</audio>
+<audio id="audio" controls autoplay></audio>
+
+<script>
+    const audio = document.getElementById('audio');
+    const mediaSource = new MediaSource();
+    audio.src = URL.createObjectURL(mediaSource);
+
+    mediaSource.addEventListener('sourceopen', () => {
+        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+        const socket = new WebSocket('ws://ec2-52-204-230-5.compute-1.amazonaws.com:3000');
+
+        socket.binaryType = 'arraybuffer';
+
+        let queue = [];
+        let processing = false;
+
+        socket.addEventListener('message', (event) => {
+            queue.push(event.data);
+            if (!processing) {
+                processQueue();
+            }
+        });
+
+        function processQueue() {
+            if (queue.length === 0 || sourceBuffer.updating) return;
+
+            processing = true;
+            sourceBuffer.appendBuffer(new Uint8Array(queue.shift()));
+            sourceBuffer.addEventListener('updateend', () => {
+                // Clear old buffered data to prevent memory leaks
+                if (audio.buffered.length > 0) {
+                    const currentTime = audio.currentTime;
+                    const bufferEnd = audio.buffered.end(0);
+                    if (bufferEnd - currentTime > 30) { // Keep only the last 30 seconds
+                        const start = 0;
+                        const end = currentTime - 30;
+                        if (end > start) {
+                            sourceBuffer.remove(start, end);
+                        }
+                    }
+                }
+                processing = false;
+                processQueue();
+            }, { once: true });
+        }
+
+        sourceBuffer.addEventListener('updateend', () => {
+            if (queue.length > 0) {
+                processQueue();
+            }
+        });
+    });
+
+    // Auto-play handling
+    audio.play().catch(error => {
+        console.error('Auto-play was prevented:', error);
+        document.body.addEventListener('click', () => {
+            audio.play();
+        }, { once: true });
+    });
+</script>
 </body>
 </html>

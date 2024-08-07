@@ -1,10 +1,19 @@
 const express = require('express');
 const path = require('path');
 const { getMp3Info, startStreaming } = require('./audio');
+const WebSocket = require('ws');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('ffmpeg-static');
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 const port = 3000;
 const filePath = path.join(__dirname, 'test.mp3');
+
+let clients = [];
+let buffer = [];
+let stream = null;
 
 // Serve the HTML file
 app.get('/', (req, res) => {
@@ -16,42 +25,34 @@ app.get('/', (req, res) => {
     });
 });
 
-let clients = [];
-let speed = 128; // Default speed in bytes per millisecond
+// WebSocket server setup
+const server = app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+});
 
-// Function to handle new client connections
-function handleNewClient(res) {
-    console.log('New client connected');
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Transfer-Encoding', 'chunked');
-    //res.setHeader('Connection', 'keep-alive');
+const wss = new WebSocket.Server({ server });
 
-    // Check if the client is already in the list
-    if (!clients.includes(res)) {
-        clients.push(res);
-        // Send an initial small chunk of data to keep the connection alive
-        res.write(Buffer.from([0x00]));
-    }
-}
+wss.on('connection', (ws) => {
+    console.log('Client connected');
+    clients.push(ws);
 
-// Get MP3 info and start the server
+    // Send the current buffer to the new client
+    buffer.forEach(chunk => {
+        if (ws.readyState === ws.OPEN) {
+            ws.send(chunk);
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('Client disconnected');
+        clients = clients.filter(client => client !== ws);
+    });
+});
+
 getMp3Info(filePath).then((info) => {
-    speed = info.speed; // Update speed with the calculated value
+    const speed = info.speed;
     console.log(`MP3 duration: ${info.duration}s, File size: ${info.fileSize} bytes, Speed: ${speed.toFixed(2)} bytes/ms`);
-
-    app.get('/stream', (req, res) => {
-        handleNewClient(res);
-
-        req.on('close', () => {
-            console.log('Client disconnected');
-            clients = clients.filter((client) => client !== res);
-        });
-    });
-
-    app.listen(port, () => {
-        console.log(`Server is running on http://localhost:${port}`);
-        startStreaming(filePath, clients, speed);
-    });
+    stream = startStreaming(filePath, clients, speed, buffer);
 }).catch((err) => {
     console.error('Error getting MP3 info:', err.message);
 });
