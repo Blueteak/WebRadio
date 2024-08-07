@@ -1,46 +1,60 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
-const Lame = require('node-lame').Lame;
-const Readable = require('stream').Readable;
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('ffmpeg-static');
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 const port = 3000;
 const filePath = path.join(__dirname, 'test.mp3');
 
-let audioBuffer = null;
-let audioStream = new Readable();
-app.get('/stream', (req, res) => {
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
+let clients = [];
 
-    if (range) {
-        const parts = range.replace(/bytes=/, "").split("-");
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunksize = (end - start) + 1;
-        const file = fs.createReadStream(filePath, { start, end });
-        const head = {
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': chunksize,
-            'Content-Type': 'audio/mpeg',
-        };
-        res.writeHead(206, head);
-        file.pipe(res);
-    } else {
-        const head = {
-            'Content-Length': fileSize,
-            'Content-Type': 'audio/mpeg',
-        };
-        res.writeHead(200, head);
-        fs.createReadStream(filePath).pipe(res);
-    }
+// Function to handle new client connections
+function handleNewClient(res) {
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    clients.push(res);
+}
+
+// Function to stream audio to clients
+function startStreaming() {
+    const command = ffmpeg(filePath)
+        .format('mp3')
+        .audioCodec('libmp3lame')
+        .on('error', (err) => {
+            console.error('An error occurred: ' + err.message);
+        });
+
+    const stream = command.pipe();
+
+    stream.on('data', (chunk) => {
+        clients.forEach((client) => {
+            if (!client.writableEnded) {
+                client.write(chunk);
+            } else {
+                clients = clients.filter((c) => c !== client);
+            }
+        });
+    });
+
+    stream.on('end', () => {
+        console.log('Restarting stream');
+        startStreaming();
+    });
+}
+
+app.get('/stream', (req, res) => {
+    handleNewClient(res);
+
+    req.on('close', () => {
+        console.log('Client disconnected');
+        clients = clients.filter((client) => client !== res);
+    });
 });
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
+    startStreaming();
 });
-
-console.log("Server starting on port " + port);
