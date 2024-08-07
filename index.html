@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,10 +7,12 @@
 </head>
 <body>
 <audio id="audio" controls autoplay></audio>
+<div id="metadata"></div>
 
 <script>
     const audio = document.getElementById('audio');
     const mediaSource = new MediaSource();
+    const metadataDiv = document.getElementById('metadata');
     audio.src = URL.createObjectURL(mediaSource);
 
     mediaSource.addEventListener('sourceopen', () => {
@@ -22,9 +25,20 @@
         let processing = false;
 
         socket.addEventListener('message', (event) => {
-            queue.push(event.data);
-            if (!processing) {
-                processQueue();
+            if (typeof event.data === 'string') {
+                try {
+                    const message = JSON.parse(event.data);
+                    if (message.type === 'metadata') {
+                        metadataDiv.textContent = `Now playing: ${message.name}`;
+                    }
+                } catch (e) {
+                    console.error('Error parsing JSON message:', e);
+                }
+            } else {
+                queue.push(event.data);
+                if (!processing) {
+                    processQueue();
+                }
             }
         });
 

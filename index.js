@@ -37,10 +37,26 @@ wss.on('connection', (ws) => {
         }
     });
 
+    // Send current song metadata
+    if (currentSongMetadata) {
+        ws.send(JSON.stringify({ type: 'metadata', name: currentSongMetadata.name }));
+    }
+
     ws.on('close', () => {
         console.log('Client disconnected');
         clients = clients.filter(client => client !== ws);
     });
 });
 
-initialize(clients, buffer);
+let currentSongMetadata = null;
+
+const updateCurrentSongMetadata = (metadata) => {
+    currentSongMetadata = metadata;
+    clients.forEach((client) => {
+        if (client.readyState === client.OPEN) {
+            client.send(JSON.stringify(metadata));
+        }
+    });
+}
+
+initialize(clients, buffer, updateCurrentSongMetadata);
