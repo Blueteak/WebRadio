@@ -23,8 +23,11 @@ const initialize = (clients, buffer, updateMetadata) => {
 }
 
 const startStreaming = (clients, buffer, updateMetadata) => {
+
     (async () => {
         try {
+            const fadeDuration = 5; // duration of fade in seconds
+
             let preloadBuffer1 = [];
             let preloadBuffer2 = [];
             let currentBuffer = preloadBuffer1;
@@ -43,28 +46,33 @@ const startStreaming = (clients, buffer, updateMetadata) => {
             currentTempFilePath = currentSong.path;
             let currentSpeed = currentSong.speed;
 
-
+            let chunks = await streamFileWithFade(currentTempFilePath, fadeDuration, info);
+            let nextChunks = [];
+            let curDuration = info.duration;
 
             while (true) {
-                // Stream the current song
-                const fadeDuration = 5; // duration of fade in seconds
-                const chunks = await streamFileWithFade(currentTempFilePath, fadeDuration, info);
-
 
                 updateMetadata({ type: 'metadata', name: file.name });
 
                 let totalBytesStreamed = 0;
+                let nextDur = 0;
+
 
                 // Pre-load the next song while streaming the current one
                 file = getRandomFilePath();
                 console.log(`Preloading next song: ${file.name}`);
-                let nextSongSpeed = 0;
+                let nextSongSpeed = 20;
                 getMp3Info(file.path).then(info => {
                     loadAndPrepareFile(file.path, info.duration).then(nextSong => {
                         nextTempFilePath = nextSong.path;
                         nextBuffer.length = 0; // Clear the next buffer
                         nextBuffer = currentBuffer.concat(nextBuffer);
                         nextSongSpeed = nextSong.speed;
+                        nextDur = info.duration;
+                    }).then(() => {
+                        streamFileWithFade(nextTempFilePath, fadeDuration, info).then(mp3Dat => {
+                            nextChunks = mp3Dat;
+                        });
                     });
                 });
 
@@ -76,11 +84,13 @@ const startStreaming = (clients, buffer, updateMetadata) => {
                     totalBytesStreamed += chunk.length;
                 }
 
-                console.log(`Finished streaming ${file.name} (${totalBytesStreamed} bytes) in ${(Date.now() - startTime)}ms`);
+                console.log(`Finished streaming ${file.name} (${totalBytesStreamed} bytes) in ${(Date.now() - startTime)}ms -> Check ` + curDuration);
 
                 // Swap buffers and temp file paths
                 [currentTempFilePath, nextTempFilePath] = [nextTempFilePath, currentTempFilePath];
                 [currentSpeed, nextSongSpeed] = [nextSongSpeed, currentSpeed];
+                chunks = nextChunks;
+                curDuration = nextDur;
             }
         } catch (err) {
             console.error('Error in streaming:', err);
@@ -95,7 +105,7 @@ const loadAndPrepareFile = async (filePath, duration) => {
     const tempFilePath = path.join(os.tmpdir(), `${uuidv4()}.mp3`);
     fs.writeFileSync(tempFilePath, Buffer.concat(preloadBuffer));
     const currentSongSpeed = preloadBuffer.reduce((acc, chunk) => acc + chunk.length, 0) / (duration * 1000); // Calculate speed in bytes per millisecond
-    return { path: tempFilePath, speed: currentSongSpeed };
+    return { path: tempFilePath, speed: currentSongSpeed * 1.02 };
 };
 
 const streamFileWithFade = (filePath, fadeDuration, info) => {
