@@ -17,12 +17,18 @@ const filePaths = [
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 let stream = null;
+let curClients = [];
 
 const initialize = (clients, buffer, updateMetadata) => {
-    startStreaming(clients, buffer, updateMetadata);
+    curClients = clients;
+    startStreaming( buffer, updateMetadata);
 }
 
-const startStreaming = (clients, buffer, updateMetadata) => {
+const updateClientList = (clients) => {
+    curClients = clients;
+}
+
+const startStreaming = (buffer, updateMetadata) => {
 
     (async () => {
         try {
@@ -57,7 +63,6 @@ const startStreaming = (clients, buffer, updateMetadata) => {
                 let totalBytesStreamed = 0;
                 let nextDur = 0;
 
-
                 // Pre-load the next song while streaming the current one
                 file = getRandomFilePath();
                 console.log(`Preloading next song: ${file.name}`);
@@ -80,7 +85,7 @@ const startStreaming = (clients, buffer, updateMetadata) => {
                 console.log(`Started streaming ${file.name} at ${new Date(startTime).toISOString()} with size ${info.fileSize} bytes`);
 
                 for (const chunk of chunks) {
-                    await throttleStream(chunk, currentSpeed, buffer, clients);
+                    await throttleStream(chunk, currentSpeed, buffer);
                     totalBytesStreamed += chunk.length;
                 }
 
@@ -166,7 +171,7 @@ const aggregateChunks = (chunks, targetSize) => {
     return aggregatedChunks;
 };
 
-const throttleStream = (chunk, speed, buffer, clients) => {
+const throttleStream = (chunk, speed, buffer) => {
     return new Promise((resolve) => {
         const chunkSize = chunk.length;
 
@@ -175,7 +180,7 @@ const throttleStream = (chunk, speed, buffer, clients) => {
             console.log(`Streaming Chunk: ${chunkSize} bytes`);
             if (buffer.length > 10) buffer.shift(); // Keep the last 10 chunks
 
-            clients.forEach((client) => {
+            curClients.forEach((client) => {
                 if (client.readyState === client.OPEN) {
                     client.send(chunk);
                 }
@@ -236,4 +241,5 @@ const getRandomFilePath = (excludeFilePath) => {
 module.exports = {
     initialize,
     startStreaming,
+    updateClientList
 };

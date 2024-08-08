@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { initialize } = require('./audio');
+const { initialize, updateClientList } = require('./audio');
 const WebSocket = require('ws');
 
 const app = express();
@@ -29,6 +29,7 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
     console.log('Client connected');
     clients.push(ws);
+    updateClientList(clients);
 
     // Send the current buffer to the new client
     buffer.forEach(chunk => {
@@ -45,6 +46,7 @@ wss.on('connection', (ws) => {
     ws.on('close', () => {
         console.log('Client disconnected');
         clients = clients.filter(client => client !== ws);
+        updateClientList(clients);
     });
 });
 
