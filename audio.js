@@ -7,10 +7,10 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
 const filePaths = [
-    { path: path.join(__dirname, 'Dance_Party.mp3'), name: 'Dance Party' },
-    { path: path.join(__dirname, '30S_Timer.mp3'), name: '30 Second Timer' },
-    { path: path.join(__dirname, 'Short_Song.mp3'), name: 'Short Song' },
-    { path: path.join(__dirname, 'test_short.mp3'), name: 'Test Short' },
+    { path: path.join(__dirname, 'Dance_Party.mp3'), name: 'Dance Party', artist: '123' },
+    { path: path.join(__dirname, '30S_Timer.mp3'), name: '30 Second Timer', artist: '456' },
+    { path: path.join(__dirname, 'Short_Song.mp3'), name: 'Short Song', artist: '789' },
+    { path: path.join(__dirname, 'test_short.mp3'), name: 'Test Short', artist: '000' },
     // Add more file paths as needed
 ];
 

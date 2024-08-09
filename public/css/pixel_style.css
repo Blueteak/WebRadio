@@ -1,0 +1,47 @@
+body {
+	background: #000;
+	color: #888;
+	font-family: Helvetica, sans-serif; font-size:11px;
+	overflow: hidden;
+	margin: 0;
+	padding: 0;
+	width: 2048px;
+}
+
+#container {
+	position: relative;
+	left: 0px;
+	top: 0px;
+	height: 100%;
+}
+
+#artCredit {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+	font-family: "Pixelify Sans", sans-serif;
+    font-size: 16px; /* Set your desired font size */
+    color: white; /* Or any color that fits your design */
+    z-index: 10; /* Ensure it's on top of other elements */
+    text-shadow: 0px 0px 8px rgba(0, 0, 0, 1); /* Adds a subtle drop shadow */
+}
+
+#mycanvas {
+	float: left;
+	z-index: 2;
+	
+	-webkit-transform-origin: 0px 0px;
+	-moz-transform-origin: 0px 0px;
+	-o-transform-origin: 0px 0px;
+	
+	/* -webkit-transform: translate3d(0px, 0px, 0px) scale(1);
+	-moz-transform: translate(0px 0px) scale(1);
+	-o-transform:translate(0px 0px) scale(1);
+	 */
+	 
+	image-rendering: -moz-crisp-edges;
+	image-rendering: -webkit-crisp-edges;
+	image-rendering: pixelated;
+	image-rendering: crisp-edges;
+}
+

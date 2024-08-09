@@ -9,11 +9,14 @@ const port = 3000;
 let clients = [];
 let buffer = [];
 
+app.use(express.static('public'));
+app.use('/public', express.static('public'));
+
 // Serve the HTML file
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'), (err) => {
         if (err) {
-            console.error('Error serving index.html:', err);
+            console.error('Error serving index_player.html:', err);
             res.status(err.status).end();
         }
     });

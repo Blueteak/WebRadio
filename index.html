@@ -1,140 +1,181 @@
-<!DOCTYPE html>
+<!doctype html>
+
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Custom Audio Player</title>
-    <style>
-        #player {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 50px;
-        }
-        #metadata {
-            margin: 10px 0;
-            font-size: 18px;
-        }
-        #controls {
-            display: flex;
-            justify-content: space-around;
-            width: 300px;
-            margin-top: 10px;
-        }
-        button, input[type="range"] {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-    </style>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
+
+	<link rel="stylesheet" type="text/css" href="/css/pixel_style.css" >
+	<link rel="stylesheet" type="text/css" href="/css/audioplayer.css" >
+	
+	<script type="text/javascript" src="/pixelart/oop.js"></script>
+	<script type="text/javascript" src="/pixelart/tools.js"></script>
+	<script type="text/javascript" src="/pixelart/palette.js"></script>
+	<script type="text/javascript" src="/pixelart/bitmap.js"></script>
+	<script type="text/javascript" src="/pixelart/scenes.js"></script>
+	<script type="text/javascript" src="/pixelart/main.js"></script>
+	
 </head>
 <body>
-<div id="player">
-    <audio id="audio"></audio>
-    <div id="metadata">Loading...</div>
-    <input type="range" id="slider" min="0" max="100" step="1" value="0">
-    <div id="controls">
-        <button id="play">Play</button>
-        <button id="pause">Pause</button>
-        <button id="latest">Latest</button>
-    </div>
-</div>
+	
+	<div id="container">
 
-<script>
-    const audio = document.getElementById('audio');
-    const mediaSource = new MediaSource();
-    const metadataDiv = document.getElementById('metadata');
-    const playButton = document.getElementById('play');
-    const pauseButton = document.getElementById('pause');
-    const latestButton = document.getElementById('latest');
-    const slider = document.getElementById('slider');
-    audio.src = URL.createObjectURL(mediaSource);
 
-    mediaSource.addEventListener('sourceopen', () => {
-        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        const socket = new WebSocket('ws://ec2-52-204-230-5.compute-1.amazonaws.com:3000');
+		<canvas id="mycanvas" width="640" height="480" style=""></canvas>
 
-        socket.binaryType = 'arraybuffer';
+		<div id="player">
+			<audio id="audio"></audio>
+			<div id="metadata">Loading...</div>
+			<input type="range" id="slider" min="0" max="100" step="1" value="0">
+			<div id="controls">
+				<button id="play">Play</button>
+				<button id="pause">Pause</button>
+				<button id="latest">Latest</button>
+			</div>
+		</div>
 
-        let queue = [];
-        let processing = false;
+		<div id="artCredit">Art by Mark Ferrari</div>
+	</div>
+		
+	<!-- Pixel Art Handling-->
+	<script language="JavaScript">
+		if (document.addEventListener) {
+			// Good browsers
+			document.addEventListener( "DOMContentLoaded", function() {
+				document.removeEventListener( "DOMContentLoaded", arguments.callee, false );
+				CC.init();
+			}, false );
 
-        socket.addEventListener('message', (event) => {
-            if (typeof event.data === 'string') {
-                try {
-                    const message = JSON.parse(event.data);
-                    if (message.type === 'metadata') {
-                        metadataDiv.textContent = `Now playing: ${message.name} by ${message.artist} from the album ${message.album}. Duration: ${message.duration} seconds.`;
-                    }
-                } catch (e) {
-                    console.error('Error parsing JSON message:', e);
-                }
-            } else {
-                queue.push(event.data);
-                console.log('Received new data - Current queue length:', queue.length);
-                if (!processing) {
-                    processQueue();
-                }
-            }
-        });
+			// Just in case
+			window.addEventListener( "load", function() {
+				window.removeEventListener( "load", arguments.callee, false );
+				CC.init();
+			}, false );
+			
+			window.addEventListener( "resize", function() {
+				CC.handleResize();
+			}, false );
+		}
+		else if (window.attachEvent) {
+			// Bad browsers have to wait
+			window.attachEvent("onload", function() {
+				setTimeout( function() { CC.init(); }, 1000 );
+			});
+			
+			window.attachEvent("onresize", function() {
+				CC.handleResize();
+			});
+			
+			// chrome frame
+			// CFInstall.check({ mode: "overlay" });
+		}
+	</script>
 
-        function processQueue() {
-            if (queue.length === 0 || sourceBuffer.updating) return;
+	<!-- Audio Player -->
+	<script>
+		const audio = document.getElementById('audio');
+		const mediaSource = new MediaSource();
+		const metadataDiv = document.getElementById('metadata');
+		const playButton = document.getElementById('play');
+		const pauseButton = document.getElementById('pause');
+		const latestButton = document.getElementById('latest');
+		const slider = document.getElementById('slider');
+		audio.src = URL.createObjectURL(mediaSource);
 
-            processing = true;
-            sourceBuffer.appendBuffer(new Uint8Array(queue.shift()));
-            sourceBuffer.addEventListener('updateend', () => {
-                if (audio.buffered.length > 0) {
-                    const currentTime = audio.currentTime;
-                    const bufferEnd = audio.buffered.end(0);
-                    if (bufferEnd - currentTime > 30) {
-                        const start = 0;
-                        const end = currentTime - 30;
-                        if (end > start) {
-                            sourceBuffer.remove(start, end);
-                        }
-                    }
-                }
-                processing = false;
-                processQueue();
-            }, { once: true });
-        }
+		mediaSource.addEventListener('sourceopen', () => {
 
-        sourceBuffer.addEventListener('updateend', () => {
-            if (queue.length > 0) {
-                processQueue();
-            }
-        });
+			slider.value = 50;
+			audio.volume = slider.value / 100;
 
-        socket.addEventListener('error', (error) => {
-            console.error('WebSocket error:', error);
-        });
+			const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+			const socket = new WebSocket('ws://ec2-52-204-230-5.compute-1.amazonaws.com:3000');
 
-        socket.addEventListener('close', () => {
-            console.log('WebSocket connection closed');
-        });
-    });
+			socket.binaryType = 'arraybuffer';
 
-    // User controls
-    playButton.addEventListener('click', () => audio.play());
-    pauseButton.addEventListener('click', () => audio.pause());
-    latestButton.addEventListener('click', () => {
-        if (audio.buffered.length > 0) {
-            audio.currentTime = audio.buffered.end(audio.buffered.length - 1) - 1;
-        }
-    });
+			let queue = [];
+			let processing = false;
 
-    // Slider control
-    slider.addEventListener('input', () => {
-        audio.volume = slider.value / 100;
-    });
+			socket.addEventListener('message', (event) => {
+				if (typeof event.data === 'string') {
+					try {
+						const message = JSON.parse(event.data);
+						if (message.type === 'metadata') {
+							metadataDiv.innerHTML = `${message.name} <br> ${message.artist}`;
+						}
+					} catch (e) {
+						console.error('Error parsing JSON message:', e);
+					}
+				} else {
+					queue.push(event.data);
+					console.log('Received new data - Current queue length:', queue.length);
+					if (!processing) {
+						processQueue();
+					}
+				}
+			});
 
-    // Auto-play handling
-    audio.play().catch(error => {
-        console.error('Auto-play was prevented:', error);
-        document.body.addEventListener('click', () => {
-            audio.play();
-        }, { once: true });
-    });
-</script>
+			function processQueue() {
+				if (queue.length === 0 || sourceBuffer.updating) return;
+
+				processing = true;
+				sourceBuffer.appendBuffer(new Uint8Array(queue.shift()));
+				sourceBuffer.addEventListener('updateend', () => {
+					if (audio.buffered.length > 0) {
+						const currentTime = audio.currentTime;
+						const bufferEnd = audio.buffered.end(0);
+						if (bufferEnd - currentTime > 30) {
+							const start = 0;
+							const end = currentTime - 30;
+							if (end > start) {
+								sourceBuffer.remove(start, end);
+							}
+						}
+					}
+					processing = false;
+					processQueue();
+				}, { once: true });
+			}
+
+			sourceBuffer.addEventListener('updateend', () => {
+				if (queue.length > 0) {
+					processQueue();
+				}
+			});
+
+			socket.addEventListener('error', (error) => {
+				console.error('WebSocket error:', error);
+			});
+
+			socket.addEventListener('close', () => {
+				console.log('WebSocket connection closed');
+			});
+		});
+
+		// User controls
+		playButton.addEventListener('click', () => audio.play());
+		pauseButton.addEventListener('click', () => audio.pause());
+		latestButton.addEventListener('click', () => {
+			if (audio.buffered.length > 0) {
+				audio.currentTime = audio.buffered.end(audio.buffered.length - 1) - 1;
+			}
+		});
+
+		// Slider control
+		slider.addEventListener('input', () => {
+			audio.volume = slider.value / 100;
+		});
+
+		// Auto-play handling
+		audio.play().catch(error => {
+			console.error('Auto-play was prevented:', error);
+			document.body.addEventListener('click', () => {
+				audio.play();
+			}, { once: true });
+		});
+	</script>
 </body>
 </html>
