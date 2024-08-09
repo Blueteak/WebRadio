@@ -9,9 +9,10 @@
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
 
-	<link rel="stylesheet" type="text/css" href="/css/pixel_style.css" >
 	<link rel="stylesheet" type="text/css" href="/css/audioplayer.css" >
-	
+	<script type="module"  src="/audioplayer.js"></script>
+
+	<link rel="stylesheet" type="text/css" href="/css/pixel_style.css" >
 	<script type="text/javascript" src="/pixelart/oop.js"></script>
 	<script type="text/javascript" src="/pixelart/tools.js"></script>
 	<script type="text/javascript" src="/pixelart/palette.js"></script>
@@ -27,22 +28,20 @@
 
 		<canvas id="mycanvas" width="640" height="480" style=""></canvas>
 
+		<div id="metadata">Loading...</div>
+
 		<div id="player">
 			<audio id="audio"></audio>
-			<div id="metadata">Loading...</div>
-			<input type="range" id="slider" min="0" max="100" step="1" value="0">
-			<div id="controls">
-				<button id="play">Play</button>
-				<button id="pause">Pause</button>
-				<button id="latest">Latest</button>
-			</div>
+			<button id="play-icon"></button>
+			<br>
+			<input type="range" id="volume" min="0" max="100" step="1" value="0">
 		</div>
 
 		<div id="artCredit">Art by Mark Ferrari</div>
 	</div>
 		
 	<!-- Pixel Art Handling-->
-	<script language="JavaScript">
+	<script>
 		if (document.addEventListener) {
 			// Good browsers
 			document.addEventListener( "DOMContentLoaded", function() {
@@ -77,19 +76,27 @@
 
 	<!-- Audio Player -->
 	<script>
+		console.log("Loading Audio Player");
+
+		let isPlaying = false;
 		const audio = document.getElementById('audio');
-		const mediaSource = new MediaSource();
 		const metadataDiv = document.getElementById('metadata');
-		const playButton = document.getElementById('play');
-		const pauseButton = document.getElementById('pause');
-		const latestButton = document.getElementById('latest');
-		const slider = document.getElementById('slider');
+		const playButton = document.getElementById('play-icon');
+		const slider = document.getElementById('volume');
+
+		const mediaSource = new MediaSource();
 		audio.src = URL.createObjectURL(mediaSource);
+
+		slider.value = 50;
+		audio.volume = slider.value / 100;
+
+		console.log("Audio Player Loaded");
 
 		mediaSource.addEventListener('sourceopen', () => {
 
-			slider.value = 50;
-			audio.volume = slider.value / 100;
+			console.log("Setting up Audio Player Socket");
+
+
 
 			const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
 			const socket = new WebSocket('ws://ec2-52-204-230-5.compute-1.amazonaws.com:3000');
@@ -104,14 +111,13 @@
 					try {
 						const message = JSON.parse(event.data);
 						if (message.type === 'metadata') {
-							metadataDiv.innerHTML = `${message.name} <br> ${message.artist}`;
+							metadataDiv.innerHTML = `${message.name} <br>- ${message.artist}`;
 						}
 					} catch (e) {
 						console.error('Error parsing JSON message:', e);
 					}
 				} else {
 					queue.push(event.data);
-					console.log('Received new data - Current queue length:', queue.length);
 					if (!processing) {
 						processQueue();
 					}
@@ -156,26 +162,25 @@
 		});
 
 		// User controls
-		playButton.addEventListener('click', () => audio.play());
-		pauseButton.addEventListener('click', () => audio.pause());
-		latestButton.addEventListener('click', () => {
-			if (audio.buffered.length > 0) {
-				audio.currentTime = audio.buffered.end(audio.buffered.length - 1) - 1;
+		//playButton.addEventListener('click', () => audio.play());
+		//pauseButton.addEventListener('click', () => audio.pause());
+
+		playButton.addEventListener('click', togglePlay);
+
+		function togglePlay() {
+			if (isPlaying) {
+				audio.pause();
+			} else {
+				audio.play();
 			}
-		});
+			isPlaying = !isPlaying;
+		}
 
 		// Slider control
 		slider.addEventListener('input', () => {
 			audio.volume = slider.value / 100;
 		});
 
-		// Auto-play handling
-		audio.play().catch(error => {
-			console.error('Auto-play was prevented:', error);
-			document.body.addEventListener('click', () => {
-				audio.play();
-			}, { once: true });
-		});
 	</script>
 </body>
 </html>

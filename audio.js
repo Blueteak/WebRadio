@@ -58,7 +58,7 @@ const startStreaming = (buffer, updateMetadata) => {
 
             while (true) {
 
-                updateMetadata({ type: 'metadata', name: file.name });
+                updateMetadata({ type: 'metadata', name: file.name, artist: file.artist });
 
                 let totalBytesStreamed = 0;
                 let nextDur = 0;

@@ -49,8 +49,6 @@ var CanvasCycle = {
 
 	loadImage: function() {
 		this.stop();
-
-		console.log("Loading Image")
 		var scriptName = '/pixelart/seascape.js';//name + '.js'; // Assuming the file name is the same as 'name' but with .js extension
 		var scr = document.createElement('SCRIPT');
 		scr.type = 'text/javascript';

@@ -43,7 +43,7 @@ wss.on('connection', (ws) => {
 
     // Send current song metadata
     if (currentSongMetadata) {
-        ws.send(JSON.stringify({ type: 'metadata', name: currentSongMetadata.name }));
+        ws.send(JSON.stringify({ type: 'metadata', name: currentSongMetadata.name, artist: currentSongMetadata.artist }));
     }
 
     ws.on('close', () => {
