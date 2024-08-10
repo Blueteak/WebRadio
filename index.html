@@ -5,6 +5,10 @@
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 	<meta http-equiv="X-UA-Compatible" content="chrome=1">
 
+	<link rel="icon" type="image/x-icon" href="/images/favicon.ico">
+	<link rel="shortcut icon" href="/images/favicon.ico" type="image/x-icon" />
+	<title>Chiptune Radio</title>
+
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
@@ -19,14 +23,16 @@
 	<script type="text/javascript" src="/pixelart/bitmap.js"></script>
 	<script type="text/javascript" src="/pixelart/scenes.js"></script>
 	<script type="text/javascript" src="/pixelart/main.js"></script>
+
+	<link rel="stylesheet" type="text/css" href="/css/extras.css" >
 	
 </head>
 <body>
 	
 	<div id="container">
-
-
 		<canvas id="mycanvas" width="640" height="480" style=""></canvas>
+
+		<img id="info-button" src="images/info.png" alt="Info">
 
 		<div id="metadata">Loading...</div>
 
@@ -39,6 +45,22 @@
 
 		<div id="artCredit">Art by Mark Ferrari</div>
 	</div>
+
+	<div id="info-window">
+		<p>Information about this content...</p>
+		<button id="close-info">close</button>
+	</div>
+
+	<!-- Extra Functionality -->
+	<script>
+		document.getElementById('info-button').addEventListener('click', function() {
+			document.getElementById('info-window').style.display = 'block';
+		});
+
+		document.getElementById('close-info').addEventListener('click', function() {
+			document.getElementById('info-window').style.display = 'none';
+		});
+	</script>
 		
 	<!-- Pixel Art Handling-->
 	<script>
@@ -84,6 +106,16 @@
 		const playButton = document.getElementById('play-icon');
 		const slider = document.getElementById('volume');
 
+		let didFirstLoad = false;
+
+		//const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+		const audioQueue = [];
+		let isProcessing = false;
+
+		// Create a gain node for volume control
+		//const gainNode = audioContext.createGain();
+		//gainNode.connect(audioContext.destination);
+
 		const mediaSource = new MediaSource();
 		audio.src = URL.createObjectURL(mediaSource);
 
@@ -91,20 +123,14 @@
 		audio.volume = slider.value / 100;
 
 		console.log("Audio Player Loaded");
-
 		mediaSource.addEventListener('sourceopen', () => {
 
 			console.log("Setting up Audio Player Socket");
 
-
-
 			const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-			const socket = new WebSocket('ws://ec2-52-204-230-5.compute-1.amazonaws.com:3000');
+			const socket = new WebSocket('wss://chiptuneradio.com/websocket/');
 
 			socket.binaryType = 'arraybuffer';
-
-			let queue = [];
-			let processing = false;
 
 			socket.addEventListener('message', (event) => {
 				if (typeof event.data === 'string') {
@@ -117,18 +143,23 @@
 						console.error('Error parsing JSON message:', e);
 					}
 				} else {
-					queue.push(event.data);
-					if (!processing) {
+					audioQueue.push(event.data);
+					if (!isProcessing) {
 						processQueue();
 					}
 				}
 			});
 
 			function processQueue() {
-				if (queue.length === 0 || sourceBuffer.updating) return;
+				if (audioQueue.length === 0 || sourceBuffer.updating) return;
+
+				if (!didFirstLoad && audio.buffered.length > 0) {
+					audio.currentTime = audio.buffered.end(audio.buffered.length - 1) - 1;
+					didFirstLoad = true;
+				}
 
 				processing = true;
-				sourceBuffer.appendBuffer(new Uint8Array(queue.shift()));
+				sourceBuffer.appendBuffer(new Uint8Array(audioQueue.shift()));
 				sourceBuffer.addEventListener('updateend', () => {
 					if (audio.buffered.length > 0) {
 						const currentTime = audio.currentTime;
@@ -147,7 +178,7 @@
 			}
 
 			sourceBuffer.addEventListener('updateend', () => {
-				if (queue.length > 0) {
+				if (audioQueue.length > 0) {
 					processQueue();
 				}
 			});
@@ -160,6 +191,27 @@
 				console.log('WebSocket connection closed');
 			});
 		});
+
+		/*
+		async function processQueue() {
+			if (audioQueue.length === 0) return;
+			isProcessing = true;
+
+			const arrayBuffer = audioQueue.shift();
+			const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+			const bufferSource = audioContext.createBufferSource();
+			bufferSource.buffer = audioBuffer;
+			bufferSource.connect(gainNode);
+			bufferSource.start();
+
+			bufferSource.onended = () => {
+				isProcessing = false;
+				processQueue();
+			};
+		}
+		*/
+
 
 		// User controls
 		//playButton.addEventListener('click', () => audio.play());
@@ -175,11 +227,33 @@
 			}
 			isPlaying = !isPlaying;
 		}
+		/*
+		function togglePlay() {
+			if (isPlaying) {
+				audioContext.suspend().then(() => {
+					isPlaying = false;
+				});
+			} else {
+				audioContext.resume().then(() => {
+					isPlaying = true;
+					if (!isProcessing && audioQueue.length > 0) {
+						processQueue();
+					}
+				});
+			}
+		}
+		 */
 
 		// Slider control
 		slider.addEventListener('input', () => {
 			audio.volume = slider.value / 100;
 		});
+
+		/*
+		slider.addEventListener('input', () => {
+			gainNode.gain.value = slider.value / 100;
+		});
+		*/
 
 	</script>
 </body>
