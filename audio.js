@@ -8,17 +8,6 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const Playlist = require('./playlist');
 
-// We should use Playlist.GetRandomSong() which returns data in the format:
-// { name: 'Song Name', artist: 'Artist Name', url: 'https://example.com/song.mp3' }
-const filePaths = [
-    { path: path.join(__dirname, 'Dance_Party.mp3'), name: 'Dance Party', artist: '123' },
-    { path: path.join(__dirname, '30S_Timer.mp3'), name: '30 Second Timer', artist: '456' },
-    { path: path.join(__dirname, 'Short_Song.mp3'), name: 'Short Song', artist: '789' },
-    { path: path.join(__dirname, 'test_short.mp3'), name: 'Test Short', artist: '000' },
-    // Add more file paths as needed
-];
-
-
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 let stream = null;
@@ -50,10 +39,11 @@ const startStreaming = (buffer, updateMetadata) => {
             let nextTempFilePath = tempFilePath2;
 
             // Pre-load the first song
-            let file = getRandomFilePath();
-            console.log(`Loading first song: ${file.name}`);
-            let info = await getMp3Info(file.path);
-            let currentSong = await loadAndPrepareFile(file.path, info.duration);
+            let file = Playlist.GetRandomSong();
+            console.log(`Downloading and loading first song: ${file.name}`);
+            let tempFile = await downloadMp3FromUrl(file.url);
+            let info = await getMp3Info(tempFile);
+            let currentSong = await loadAndPrepareFile(tempFile, info.duration);
             currentTempFilePath = currentSong.path;
             let currentSpeed = currentSong.speed;
 
@@ -68,20 +58,28 @@ const startStreaming = (buffer, updateMetadata) => {
                 let totalBytesStreamed = 0;
                 let nextDur = 0;
 
-                // Pre-load the next song while streaming the current one
-                file = getRandomFilePath();
-                console.log(`Preloading next song: ${file.name}`);
+                // Preload the next song while streaming the current one
                 let nextSongSpeed = 20;
-                getMp3Info(file.path).then(info => {
-                    loadAndPrepareFile(file.path, info.duration).then(nextSong => {
-                        nextTempFilePath = nextSong.path;
-                        nextBuffer.length = 0; // Clear the next buffer
-                        nextBuffer = currentBuffer.concat(nextBuffer);
-                        nextSongSpeed = nextSong.speed;
-                        nextDur = info.duration;
-                    }).then(() => {
-                        streamFileWithFade(nextTempFilePath, fadeDuration, info).then(mp3Dat => {
-                            nextChunks = mp3Dat;
+
+                file = Playlist.GetRandomSong();
+                console.log(`Preloading next song: ${file.name}`);
+
+                downloadMp3FromUrl(file.url).then(nextTempFilePath =>
+                {
+                    getMp3Info(nextTempFilePath).then(info =>
+                    {
+                        loadAndPrepareFile(nextTempFilePath, info.duration).then(nextSong =>
+                        {
+                            nextBuffer.length = 0; // Clear the next buffer
+                            nextBuffer = currentBuffer.concat(nextBuffer);
+                            nextSongSpeed = nextSong.speed;
+                            nextDur = info.duration;
+                        }).then(() =>
+                        {
+                            streamFileWithFade(nextTempFilePath, fadeDuration, info).then(mp3Dat =>
+                            {
+                                nextChunks = mp3Dat;
+                            });
                         });
                     });
                 });
@@ -128,7 +126,7 @@ const streamFileWithFade = (filePath, fadeDuration, info) => {
                 console.log(`Reading Song Data`);
             })
             .on('end', () => {
-                console.log('Finished reading Song Data');
+                console.log('Finished reading Song Data' );
             })
             .on('error', (err) => {
                 console.error('An error occurred: ' + err.message);
@@ -176,22 +174,46 @@ const aggregateChunks = (chunks, targetSize) => {
     return aggregatedChunks;
 };
 
+let clientWait = false;
+
 const throttleStream = (chunk, speed, buffer) => {
     return new Promise((resolve) => {
         const chunkSize = chunk.length;
 
-        setTimeout(() => {
-            buffer.push(chunk);
-            console.log(`Streaming Chunk: ${chunkSize} bytes`);
-            if (buffer.length > 10) buffer.shift(); // Keep the last 10 chunks
+        const streamChunk = () => {
+            setTimeout(() => {
+                buffer.push(chunk);
+                console.log(`Streaming Chunk: ${chunkSize} bytes`);
+                if (buffer.length > 10) buffer.shift(); // Keep the last 10 chunks
 
-            curClients.forEach((client) => {
-                if (client.readyState === client.OPEN) {
-                    client.send(chunk);
+                curClients.forEach((client) => {
+                    if (client.readyState === client.OPEN) {
+                        client.send(chunk);
+                    }
+                });
+
+                resolve();
+            }, chunkSize / speed);
+        };
+
+        const waitForClients = () => {
+            if (curClients.length === 0) {
+                if(!clientWait) {
+                    console.log("No clients connected. Waiting...");
+                    clientWait = true;
                 }
-            });
-            resolve();
-        }, chunkSize / speed);
+
+                setTimeout(waitForClients, 500); // Check every half
+            } else {
+                if(clientWait) {
+                    console.log("Clients connected. Resuming streaming.");
+                    clientWait = false;
+                }
+                streamChunk();
+            }
+        };
+
+        waitForClients();
     });
 };
 
@@ -238,9 +260,26 @@ const loadFileWithFFmpeg = (filePath, preloadBuffer) => {
     });
 };
 
-const getRandomFilePath = (excludeFilePath) => {
-    let availablePaths = filePaths.filter(file => file.path !== excludeFilePath);
-    return availablePaths[Math.floor(Math.random() * availablePaths.length)];
+async function downloadMp3FromUrl(url){
+    const tempFilePath = path.join(os.tmpdir(), `${uuidv4()}.mp3`);
+
+    // Download the file using axios
+    const response = await axios({
+        method: 'get',
+        url: url,
+        responseType: 'stream'
+    });
+
+    const writer = fs.createWriteStream(tempFilePath);
+
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+    });
+
+    return tempFilePath;
 };
 
 module.exports = {

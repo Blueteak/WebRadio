@@ -4,6 +4,7 @@ const axios = require('axios');
 const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 const apiKey = process.env.GOOGLE_SHEETS_API_KEY;
 const allSongs = [];
+let lastSongs = [];
 const rowsPerPage = 20;
 
 async function FetchSongs(startRow = 1) {
@@ -56,7 +57,7 @@ function GetRandomSong() {
     lastSongs.push(randomSong);
 
     // Ensure lastSongs doesn't exceed 12 entries
-    if (lastSongs.length > 12) {
+    if (lastSongs.length > 15) {
         lastSongs.shift(); // Remove the oldest song from the list
     }
 
