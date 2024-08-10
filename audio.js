@@ -1,3 +1,4 @@
+const axios = require('axios');
 const path = require('path');
 const mp3Duration = require('mp3-duration');
 const fs = require('fs');
@@ -5,7 +6,10 @@ const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
+const Playlist = require('./playlist');
 
+// We should use Playlist.GetRandomSong() which returns data in the format:
+// { name: 'Song Name', artist: 'Artist Name', url: 'https://example.com/song.mp3' }
 const filePaths = [
     { path: path.join(__dirname, 'Dance_Party.mp3'), name: 'Dance Party', artist: '123' },
     { path: path.join(__dirname, '30S_Timer.mp3'), name: '30 Second Timer', artist: '456' },
@@ -13,6 +17,7 @@ const filePaths = [
     { path: path.join(__dirname, 'test_short.mp3'), name: 'Test Short', artist: '000' },
     // Add more file paths as needed
 ];
+
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 

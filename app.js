@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const { initialize, updateClientList } = require('./audio');
+const Playlist = require('./playlist');
 const WebSocket = require('ws');
 
 const app = express();
@@ -64,4 +65,8 @@ const updateCurrentSongMetadata = (metadata) => {
     });
 }
 
-initialize(clients, buffer, updateCurrentSongMetadata);
+console.log('Fetching playlist');
+Playlist.FetchSongs(1).then(() => {
+    console.log('Playlist fetched - Starting Audio Streaming');
+    initialize(clients, buffer, updateCurrentSongMetadata);
+});
