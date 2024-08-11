@@ -69,6 +69,8 @@
 			document.addEventListener( "DOMContentLoaded", function() {
 				document.removeEventListener( "DOMContentLoaded", arguments.callee, false );
 				CC.init();
+				CC.updateTimeOfDay(); // Call on page load
+				setInterval(CC.updateTimeOfDay, 300000); // Call every 5 minutes
 			}, false );
 
 			// Just in case

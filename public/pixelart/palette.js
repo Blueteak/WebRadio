@@ -9,11 +9,11 @@ Class.create( 'Color', {
 	red: 0,
 	green: 0,
 	blue: 0,
-	
+
 	__construct: function(r, g, b) {
 		this.set(r, g, b);
 	},
-	
+
 	set: function(r, g, b) {
 		this.red = r;
 		this.green = g;
@@ -27,7 +27,7 @@ Class.create( 'Cycle', {
 	reverse: 0,
 	low: 0,
 	high: 0,
-	
+
 	__construct: function(r, rev, l, h) {
 		this.rate = r;
 		this.reverse = rev;
@@ -39,24 +39,24 @@ Class.create( 'Cycle', {
 Class.create( 'Palette', {
 	// represents a single palette, which can have
 	// multiple "cycles" (animated color ranges) defined.
-	
+
 	colors: null,
 	baseColors: null,
 	cycles: null,
 	numColors: 0,
 	numCycles: 0,
-	
+
 	__static: {
 		// static class members
 		PRECISION: 100,
 		USE_BLEND_SHIFT: 1,
 		CYCLE_SPEED: 280,
 		ENABLE_CYCLING: 1,
-		
+
 		// this utility function allows for variable precision floating point modulus
 		DFLOAT_MOD: function(a,b) { return (Math.floor(a*Palette.PRECISION) % Math.floor(b*Palette.PRECISION))/Palette.PRECISION; }
 	},
-	
+
 	__construct: function(clrs, cycls) {
 		// class constructor
 		this.colors = [];
@@ -65,17 +65,28 @@ Class.create( 'Palette', {
 			var clr = clrs[idx];
 			this.baseColors.push( new Color( clr[0], clr[1], clr[2] ) );
 		}
-		
+
 		this.cycles = [];
 		for (var idx = 0, len = cycls.length; idx < len; idx++) {
 			var cyc = cycls[idx];
 			this.cycles.push( new Cycle( cyc.rate, cyc.reverse, cyc.low, cyc.high ) );
 		}
-		
+
 		this.numColors = this.baseColors.length;
 		this.numCycles = this.cycles.length;
 	},
-	
+
+	importColors: function(source) {
+		// import colors into our base color list
+		var dest = this.baseColors;
+		for (var idx = 0, len = source.length; idx < len; idx++) {
+			if (!dest[idx]) dest[idx] = new Color();
+			dest[idx].red = source[idx].red;
+			dest[idx].green = source[idx].green;
+			dest[idx].blue = source[idx].blue;
+		}
+	},
+
 	copyColors: function(source, dest) {
 		// copy one array of colors to another
 		for (var idx = 0, len = source.length; idx < len; idx++) {
@@ -85,7 +96,7 @@ Class.create( 'Palette', {
 			dest[idx].blue = source[idx].blue;
 		}
 	},
-	
+
 	swapColors: function(a, b) {
 		// swap the color values of a with b
 		var temp;
@@ -93,7 +104,7 @@ Class.create( 'Palette', {
 		temp = a.green; a.green = b.green; b.green = temp;
 		temp = a.blue; a.blue = b.blue; b.blue = temp;
 	},
-	
+
 	reverseColors: function(colors, range) {
 		// reverse order of colors
 		var i;
@@ -102,7 +113,7 @@ Class.create( 'Palette', {
 		for (i=0; i<cycleSize/2; i++)
 			this.swapColors(colors[range.low+i], colors[range.high-i]);
 	},
-	
+
 	fadeColor: function(sourceColor, destColor, frame, max) {
 		// fade one color into another by a partial amount, return new color in between
 		var tempColor = new Color();
@@ -117,7 +128,7 @@ Class.create( 'Palette', {
 
 		return(tempColor);
 	},
-	
+
 	shiftColors: function(colors, range, amount) {
 		// shift (hard cycle) colors by amount
 		var i, j, temp;
@@ -130,7 +141,7 @@ Class.create( 'Palette', {
 			colors[range.low] = temp;
 		} // i loop
 	},
-	
+
 	blendShiftColors: function(colors, range, amount) {
 		// shift colors using BlendShift (fade colors creating a smooth transition)
 		// BlendShift Technology conceived, designed and coded by Joseph Huckaby
@@ -145,22 +156,22 @@ Class.create( 'Palette', {
 			colors[j+1] = this.fadeColor(colors[j+1], colors[j], frame, Palette.PRECISION);
 		colors[range.low] = this.fadeColor(colors[range.low], temp, frame, Palette.PRECISION);
 	},
-	
+
 	cycle: function(sourceColors, timeNow, speedAdjust, blendShift) {
 		// cycle all animated color ranges in palette based on timestamp
 		var i;
 		var cycleSize, cycleRate;
 		var cycleAmount;
-		
+
 		this.copyColors( sourceColors, this.colors );
-		
+
 		if (Palette.ENABLE_CYCLING) {
 			for (i=0; i<this.numCycles; i++) {
 				var cycle = this.cycles[i];
 				if (cycle.rate) {
 					cycleSize = (cycle.high - cycle.low) + 1;
 					cycleRate = cycle.rate / Math.floor(Palette.CYCLE_SPEED / speedAdjust);
-					
+
 					if (cycle.reverse < 3) {
 						// standard cycle
 						cycleAmount = Palette.DFLOAT_MOD((timeNow / (1000 / cycleRate)), cycleSize);
@@ -169,7 +180,7 @@ Class.create( 'Palette', {
 						// ping-pong
 						cycleAmount = Palette.DFLOAT_MOD((timeNow / (1000 / cycleRate)), cycleSize * 2);
 						if (cycleAmount >= cycleSize) cycleAmount = (cycleSize*2) - cycleAmount;
-					} 
+					}
 					else if (cycle.reverse < 6) {
 						// sine wave
 						cycleAmount = DFLOAT_MOD((timeNow / (1000 / cycleRate)), cycleSize);
@@ -184,13 +195,13 @@ Class.create( 'Palette', {
 					else this.shiftColors(this.colors, cycle, cycleAmount);
 
 					if (cycle.reverse == 2) this.reverseColors(this.colors, cycle);
-					
+
 					cycle.cycleAmount = cycleAmount;
 				} // active cycle
 			} // i loop
 		}
 	},
-	
+
 	fade: function(destPalette, frame, max) {
 		// fade entire palette to another, by adjustable amount
 		var idx;
@@ -198,7 +209,7 @@ Class.create( 'Palette', {
 		for (idx=0; idx<this.numColors; idx++)
 			this.colors[idx] = this.fadeColor(this.colors[idx], destPalette.colors[idx], frame, max);
 	},
-	
+
 	fadeToColor: function(color, frame, max) {
 		// fade entire palette to a single color, by adjustable amount
 		var idx;
@@ -206,11 +217,11 @@ Class.create( 'Palette', {
 		for (idx=0; idx<this.numColors; idx++)
 			this.colors[idx] = this.fadeColor(this.colors[idx], color, frame, max);
 	},
-	
+
 	burnOut: function(frame, max) {
 		// burn colors towards black
 		var idx, color, amount = Math.floor(255 * (frame / max));
-		
+
 		for (idx=0; idx<this.numColors; idx++) {
 			color = this.colors[idx];
 			color.red -= amount; if (color.red < 0) color.red = 0;
@@ -218,7 +229,7 @@ Class.create( 'Palette', {
 			color.blue -= amount; if (color.blue < 0) color.blue = 0;
 		}
 	},
-	
+
 	getRawTransformedColors: function() {
 		// return transformed colors as array of 32-bit ints
 		var clrs = [];
@@ -229,5 +240,5 @@ Class.create( 'Palette', {
 		}
 		return clrs;
 	}
-	
+
 } );

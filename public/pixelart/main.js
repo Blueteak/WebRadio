@@ -39,6 +39,9 @@ var CanvasCycle = {
 		if (!this.inited) {
 			this.inited = true;
 			$('container').style.display = 'block';
+
+			// start synced to local time
+			this.updateTimeOfDay();
 		
 			this.handleResize();
 	
@@ -47,18 +50,31 @@ var CanvasCycle = {
 		}
 	},
 
+	updateTimeOfDay: function() {
+		let now = new Date();
+		this.timeOffset = (now.getHours() * 3600) + (now.getMinutes() * 60) + now.getSeconds();
+	},
+
 	loadImage: function() {
 		this.stop();
-		var scriptName = '/pixelart/seascape.js';//name + '.js'; // Assuming the file name is the same as 'name' but with .js extension
+		var scriptName = '/pixelart/seascape_scene.js';//name + '.js'; // Assuming the file name is the same as 'name' but with .js extension
 		var scr = document.createElement('SCRIPT');
 		scr.type = 'text/javascript';
 		scr.src = scriptName;
 		document.getElementsByTagName('HEAD')[0].appendChild(scr);
 	},
 
-	processImage: function(img) {
+	initScene: function(img) {
+
+		this.initPalettes( img.palettes );
+		this.initTimeline( img.timeline );
+
+		this.oldTimeOffset = -1;
+		// create an intermediate palette that will hold the time-of-day colors
+		this.todPalette = new Palette( img.base.colors, img.base.cycles );
+
 		// initialize, receive image data from server
-		this.bmp = new Bitmap(img);
+		this.bmp = new Bitmap(img.base);
 		this.bmp.optimize();
 	
 		// $('d_debug').innerHTML = img.filename;
@@ -103,13 +119,10 @@ var CanvasCycle = {
 		// animate one frame. and schedule next
 		if (this.inGame) {
 			var colors = this.bmp.palette.colors;
-	
-			if (this.settings.showOptions) {
-				for (var idx = 0, len = colors.length; idx < len; idx++) {
-					var clr = colors[idx];
-					var div = $('pal_'+idx);
-					div.style.backgroundColor = 'rgb(' + clr.red + ',' + clr.green + ',' + clr.blue + ')';
-				}
+
+			if (this.timeOffset !== this.oldTimeOffset) {
+				// calculate time-of-day base colors
+				this.setTimeOfDayPalette();
 			}
 	
 			this.bmp.palette.cycle( this.bmp.palette.baseColors, GetTickCount(), this.settings.speedAdjust, this.settings.blendShiftEnabled );
@@ -133,6 +146,99 @@ var CanvasCycle = {
 				requestAnimationFrame( function() { CanvasCycle.animate(); } );
 			}
 		}
+	},
+
+	initPalettes: function(pals) {
+		// create palette objects for each raw time-based palette
+
+		let remap = {
+			252: [11,11,11]
+		}
+
+		this.palettes = {};
+		for (var key in pals) {
+			var pal = pals[key];
+
+			if (remap) {
+				for (var idx in remap) {
+					pal.colors[idx][0] = remap[idx][0];
+					pal.colors[idx][1] = remap[idx][1];
+					pal.colors[idx][2] = remap[idx][2];
+				}
+			}
+
+			var palette = this.palettes[key] = new Palette( pal.colors, pal.cycles );
+			palette.copyColors( palette.baseColors, palette.colors );
+		}
+	},
+
+	initTimeline: function(entries) {
+		// create timeline with pointers to each palette
+		this.timeline = {};
+		for (var offset in entries) {
+			var palette = this.palettes[ entries[offset] ];
+			if (!palette) return alert("ERROR: Could not locate palette for timeline entry: " + entries[offset]);
+			this.timeline[offset] = palette;
+		}
+	},
+
+	setTimeOfDayPalette: function() {
+		// fade palette to proper time-of-day
+
+		// locate nearest timeline palette before, and after current time
+		// auto-wrap to find nearest out-of-bounds events (i.e. tomorrow and yesterday)
+		var before = {
+			palette: null,
+			dist: 86400,
+			offset: 0
+		};
+		for (var offset in this.timeline) {
+			if ((offset <= this.timeOffset) && ((this.timeOffset - offset) < before.dist)) {
+				before.dist = this.timeOffset - offset;
+				before.palette = this.timeline[offset];
+				before.offset = offset;
+			}
+		}
+		if (!before.palette) {
+			// no palette found, so wrap around and grab one with highest offset
+			var temp = 0;
+			for (var offset in this.timeline) {
+				if (offset > temp) temp = offset;
+			}
+			before.palette = this.timeline[temp];
+			before.offset = temp - 86400; // adjust timestamp for day before
+		}
+
+		var after = {
+			palette: null,
+			dist: 86400,
+			offset: 0
+		};
+		for (var offset in this.timeline) {
+			if ((offset >= this.timeOffset) && ((offset - this.timeOffset) < after.dist)) {
+				after.dist = offset - this.timeOffset;
+				after.palette = this.timeline[offset];
+				after.offset = offset;
+			}
+		}
+		if (!after.palette) {
+			// no palette found, so wrap around and grab one with lowest offset
+			var temp = 86400;
+			for (var offset in this.timeline) {
+				if (offset < temp) temp = offset;
+			}
+			after.palette = this.timeline[temp];
+			after.offset = temp + 86400; // adjust timestamp for day after
+		}
+
+		// copy the 'before' palette colors into our intermediate palette
+		this.todPalette.copyColors( before.palette.baseColors, this.todPalette.colors );
+
+		// now, fade to the 'after' palette, but calculate the correct 'tween' time
+		this.todPalette.fade( after.palette, this.timeOffset - before.offset, after.offset - before.offset );
+
+		// finally, copy the final colors back to the bitmap palette for cycling and rendering
+		this.bmp.palette.importColors( this.todPalette.colors );
 	},
 
 	scaleAnimate: function() {

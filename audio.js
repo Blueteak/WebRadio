@@ -38,11 +38,12 @@ const startStreaming = (buffer, updateMetadata) => {
             let currentTempFilePath = tempFilePath1;
             let nextTempFilePath = tempFilePath2;
 
-            // Pre-load the first song
+            // Preload the first song
             let file = Playlist.GetRandomSong();
             console.log(`Downloading and loading first song: ${file.name}`);
             let tempFile = await downloadMp3FromUrl(file.url);
             let info = await getMp3Info(tempFile);
+            info.name = file.name;
             let currentSong = await loadAndPrepareFile(tempFile, info.duration);
             currentTempFilePath = currentSong.path;
             let currentSpeed = currentSong.speed;
@@ -54,6 +55,7 @@ const startStreaming = (buffer, updateMetadata) => {
             while (true) {
 
                 updateMetadata({ type: 'metadata', name: file.name, artist: file.artist });
+                let lastSong = file;
 
                 let totalBytesStreamed = 0;
                 let nextDur = 0;
@@ -68,6 +70,7 @@ const startStreaming = (buffer, updateMetadata) => {
                 {
                     getMp3Info(nextTempFilePath).then(info =>
                     {
+                        info.name = file.name;
                         loadAndPrepareFile(nextTempFilePath, info.duration).then(nextSong =>
                         {
                             nextBuffer.length = 0; // Clear the next buffer
@@ -85,14 +88,15 @@ const startStreaming = (buffer, updateMetadata) => {
                 });
 
                 const startTime = Date.now();
-                console.log(`Started streaming ${file.name} at ${new Date(startTime).toISOString()} with size ${info.fileSize} bytes`);
+                console.log(`Started websocket streaming ${lastSong.name} at ${new Date(startTime).toISOString()} with size ${info.fileSize} bytes`);
 
                 for (const chunk of chunks) {
                     await throttleStream(chunk, currentSpeed, buffer);
                     totalBytesStreamed += chunk.length;
                 }
 
-                console.log(`Finished streaming ${file.name} (${totalBytesStreamed} bytes) in ${(Date.now() - startTime)}ms -> Check ` + curDuration);
+                console.log(`Finished websocket stream of ${lastSong.name} (${totalBytesStreamed} bytes) in ${(Date.now() - startTime)}ms -> Check ` + curDuration);
+                console.log('--------------------------------------------------------------------------------');
 
                 // Swap buffers and temp file paths
                 [currentTempFilePath, nextTempFilePath] = [nextTempFilePath, currentTempFilePath];
@@ -118,18 +122,19 @@ const loadAndPrepareFile = async (filePath, duration) => {
 
 const streamFileWithFade = (filePath, fadeDuration, info) => {
     return new Promise((resolve, reject) => {
+        console.log('Starting FFMPEG stream of ' + info.name);
         const command = ffmpeg(filePath)
             .format('mp3')
             .audioCodec('libmp3lame')
             .audioFilters(`afade=t=in:st=0:d=${fadeDuration},afade=t=out:st=${info.duration - fadeDuration}:d=${fadeDuration}`)
             .on('start', () => {
-                console.log(`Reading Song Data`);
+                console.log(`Reading Song Data of ${info.name}`);
             })
             .on('end', () => {
-                console.log('Finished reading Song Data' );
+                console.log('Finished FFMPEG stream loading of ' + info.name);
             })
             .on('error', (err) => {
-                console.error('An error occurred: ' + err.message);
+                console.error('FFMPeg Load error occurred: ' + err.message);
                 reject(err);
             });
 
@@ -143,13 +148,12 @@ const streamFileWithFade = (filePath, fadeDuration, info) => {
         });
 
         stream.on('end', () => {
-            console.log(`Total chunk bytes read: ${totalChunkBytes}`);
-            console.log('Pipe Stream Completed');
+            console.log(`Total chunk bytes read: ${totalChunkBytes} for ${info.name}`);
             resolve(aggregateChunks(chunks, 16384)); // Aggregate into 16KB chunks
         });
 
         stream.on('error', (err) => {
-            console.error('Stream error: ' + err.message);
+            console.error('FFMPeg Pipe Stream error: ' + err.message);
             reject(err);
         });
     });
@@ -183,7 +187,7 @@ const throttleStream = (chunk, speed, buffer) => {
         const streamChunk = () => {
             setTimeout(() => {
                 buffer.push(chunk);
-                console.log(`Streaming Chunk: ${chunkSize} bytes`);
+                //console.log(`Streaming Chunk: ${chunkSize} bytes`);
                 if (buffer.length > 10) buffer.shift(); // Keep the last 10 chunks
 
                 curClients.forEach((client) => {
