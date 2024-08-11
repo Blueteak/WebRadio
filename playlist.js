@@ -5,9 +5,9 @@ const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 const apiKey = process.env.GOOGLE_SHEETS_API_KEY;
 const allSongs = [];
 let lastSongs = [];
-const rowsPerPage = 20;
+const rowsPerPage = 30;
 
-async function FetchSongs(startRow = 1) {
+async function FetchSongs(startRow = 2) {
     const endRow = startRow + rowsPerPage - 1;
     const range = `Sheet1!A${startRow}:C${endRow}`;
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
@@ -57,14 +57,22 @@ function GetRandomSong() {
     lastSongs.push(randomSong);
 
     // Ensure lastSongs doesn't exceed 12 entries
-    if (lastSongs.length > 15) {
+    if (lastSongs.length > 30) {
         lastSongs.shift(); // Remove the oldest song from the list
     }
 
     return randomSong;
 }
 
+function GetPlaylistInfo()
+{
+    return {
+        count: allSongs.length
+    };
+}
+
 module.exports = {
     FetchSongs,
-    GetRandomSong
+    GetRandomSong,
+    GetPlaylistInfo
 };

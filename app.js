@@ -13,6 +13,10 @@ let buffer = [];
 app.use(express.static('public'));
 app.use('/public', express.static('public'));
 
+app.get('/library-info', (req, res) => {
+    res.json(Playlist.GetPlaylistInfo());
+});
+
 // Serve the HTML file
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'), (err) => {
@@ -20,6 +24,13 @@ app.get('/', (req, res) => {
             console.error('Error serving index_player.html:', err);
             res.status(err.status).end();
         }
+    });
+});
+
+app.get('/stats', (req, res) => {
+    res.json({
+        playListData: Playlist.GetPlaylistInfo(),
+        currentListeners: clients.length
     });
 });
 
@@ -66,7 +77,7 @@ const updateCurrentSongMetadata = (metadata) => {
 }
 
 console.log('Fetching playlist');
-Playlist.FetchSongs(1).then(() => {
+Playlist.FetchSongs(2).then(() => {
     console.log('Playlist fetched - Starting Audio Streaming');
     initialize(clients, buffer, updateCurrentSongMetadata);
 });
