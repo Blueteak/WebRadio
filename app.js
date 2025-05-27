@@ -1,3 +1,7 @@
+// To Renew SSH Certificate run the following commands
+// sudo certbot renew
+// sudo certbot renew --dry-run
+
 const express = require('express');
 const path = require('path');
 const { initialize, updateClientList } = require('./audio');
